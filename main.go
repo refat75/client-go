@@ -4,47 +4,46 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/homedir"
+	"os"
+	"path/filepath"
+	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func main() {
-	kubeconfig := flag.String("kubeconfig", "/home/rabbani/.kube/config", "Location of kube config")
+	var kubeconfig *string
+	if home := homedir.HomeDir(); home != "" {
+		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+	} else {
+		fmt.Printf("Could not find kubeconfig file in $HOME/.kube/config. \n")
+		os.Exit(1)
+	}
+	flag.Parse()
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
-
 	if err != nil {
-		//handle error
-		fmt.Printf("Error building kubeconfig from flag: %s", err.Error())
-		config, err = rest.InClusterConfig()
+		panic(err.Error())
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		//handle error
-		fmt.Printf("Error building clientset: %s", err.Error())
+		panic(err.Error())
 	}
 
-	pods, err := clientset.CoreV1().Pods("default").List(context.Background(), metav1.ListOptions{})
+	for {
+		pods, err := clientset.CoreV1().Pods("default").List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			panic(err.Error())
+		}
 
-	if err != nil {
-		// handle error
-		fmt.Printf("Error listing pods: %s", err.Error())
-	}
-	fmt.Printf("Pods Name:\n")
-	for _, pod := range pods.Items {
-		fmt.Println(pod.Name)
-	}
-
-	deployments, err := clientset.AppsV1().Deployments("default").List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		//handle error
-		fmt.Printf("Error listing deployments: %s", err.Error())
-	}
-
-	fmt.Printf("Deoloyments Name:\n")
-	for _, deployment := range deployments.Items {
-		fmt.Println(deployment.Name)
+		fmt.Printf("There are %d pods in the default namespace\n", len(pods.Items))
+		for _, pod := range pods.Items {
+			fmt.Println(pod.Name)
+		}
+		fmt.Printf("---------------------------\n")
+		time.Sleep(5 * time.Second)
 	}
 }
